@@ -10,31 +10,34 @@
 #define MAX_COMMAND_LINE_LEN 1024
 #define MAX_COMMAND_LINE_ARGS 128
 
+char prompt[] = " > ";
+char delimiters[] = " \t\r\n";
+extern char **environ;
+void sighandle(int);
+pid_t pid;
+char s[100];
+char *ptr;
+
 
 
 int main() {
-    char prompt[] = "> Ciara & Emmanuel";
-    char delimiters[] = " \t\r\n";
-    extern char **environ;
-    int counter = 0;
-    char *getcwd(char *buf, size_t size);
+  
+    signal(SIGINT, sighandle);
+    int a,b,c;
+    bool Background;
+    
     // Stores the string typed into the command line.
     char command_line[MAX_COMMAND_LINE_LEN];
     char cmd_bak[MAX_COMMAND_LINE_LEN];
-    char cwd[MAX_COMMAND_LINE_LEN];
-    int pid;
-    int status;
-    char *split;
   
     // Stores the tokenized command line input.
     char *arguments[MAX_COMMAND_LINE_ARGS];
-    	
+    
     while (true) {
-      
+        bool Background = false;
         do{ 
             // Print the shell prompt.
-            getcwd(cwd, sizeof(cwd));
-            printf("%s", prompt);
+            printf("%s>", getcwd(s, 100));
             fflush(stdout);
 
             // Read input from stdin and store it in command_line. If there's an
@@ -62,63 +65,92 @@ int main() {
         
 			  // 0. Modify the prompt to print the current working directory
 			  
-			
+        arguments[0] = strtok(command_line, delimiters);
         // 1. Tokenize the command line input (split it on whitespace)
-        int x = 0;
-        split = strtok(command_line, delimiters);
-        while (split != NULL){
-          arguments[x] = split;
-          x++;
-          split = strtok(NULL, delimiters);
+
+        a=0;
+        while(arguments[a] != NULL){
+          arguments[++a] = strtok(NULL,delimiters);
         }
+          arguments[a] == NULL;
       
         // 2. Implement Built-In Commands
-        // cd - change directory
-        char y[100];
-        printf("%s\n", getcwd(y, 100));
-        chdir("..");
-        printf("%s\n", getcwd(y, 100));
-        return 0;
-      
-        // pwd - print directory
-        if (getcwd(cwd, sizeof(cwd)) != NULL){
-          printf("%s\n", cwd);
-        } else {
-          return 0;
-        }        
-        // echo - print message and values
-        int z = 0;
-        int input;
-        while (z != EOF){
-          printf("\n Input: ");
-          z = getchar();
-          input = getchar();
-          putchar(z);
+        if (strcmp(arguments[0],"cd") == 0){
+          //$
+          chdir(arguments[1]);
+        } 
+        else if (strcmp(arguments[0],"pwd") == 0){
+          printf("%s\n", getcwd(s, 100)); 
         }
-        // exit - exit
-        exit(0);
-        // setenv - set env variable
-        char path[100]= "PATH=";
-        char *charInput = "Hello";
-        putenv(strcat(path, charInput));
-        char* pPath;
-        pPath = getenv("PATH");
-        printf("%s", pPath);
-        return 0;
-
-        // env - print current values of env
-        printf("%s", pPath);
+        else if (strcmp(arguments[0],"echo") == 0){
+          //$
+          c=1;
     
-        // 3. Create a child process which will execute the command line input
-        pid = fork();
-        if (pid == 0){
-          execve(arguments[0], arguments, environ);
+          while(arguments[c] != NULL){
+            ptr = arguments[c];
+            if(strchr(ptr,'$') != NULL){
+              memmove(ptr, ptr+1, strlen(ptr));
+              arguments[c] = getenv(ptr);
+            }
+            printf("%s ",arguments[c]);
+            c++; 
+          }
+          printf("\n");
         }
-              // 4. The parent process should wait for the child to complete unless its a background process
+        else if (strcmp(arguments[0],"exit") == 0){
+          exit(0);
+        }
+        else if (strcmp(arguments[0],"env") == 0){
+          if (arguments[1] == NULL){
+            for (a = 0; environ[a] != NULL; a++){
+                printf("\n%s", environ[a]);
+             }
+            printf("\n");
+          } else {
+              printf("%s\n",getenv(arguments[1]));
+            
+          }
+        }
+        else if(strcmp(arguments[0],"setenv") == 0){
+            const char *str_arr[2];
+            char *str = arguments[1];
+            a=0;
+            str_arr[a] = strtok(str, "=");
+            while(str_arr[a] != NULL) {
+              str_arr[++a] = strtok(NULL,"=");
+            }
+            setenv(str_arr[0],str_arr[1],1);
+          
+        }
+        else{
+          if (strcmp(arguments[a-1],"&") == 0){
+           arguments[a-1] = NULL;
+           Background = true;//flag
+            
+          }
+          pid = fork();
+          if (pid<0){
+            perror("fork failed");
+            exit(0);
+          }
+          else if(pid == 0){ 
+            execvp(arguments[0], arguments);
+            printf("execvp() failed: No such file or directory");
+            exit(0);
+          }
+          else{
+            // 4. The parent process should wait for the child to complete unless its a background process
+            if (Background  != true){
+              wait(NULL);
+            }
+            
+          }
+        }     
+        // 3. Create a child process which will execute the command line input
 
-        else if (pid > 0){
-          wait(&status);
-        }      
+  
+        
+      
       
         // Hints (put these into Google):
         // man fork
@@ -137,3 +169,8 @@ int main() {
     return -1;
 }
 
+void sighandle(int signum){
+  printf("caught signal %d,coming out...\n", signum);
+  kill(pid,SIGKILL);
+ 
+}
